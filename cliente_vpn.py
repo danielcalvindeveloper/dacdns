@@ -212,6 +212,19 @@ def on_message(client, userdata, msg):
             return
         
         timestamp = parse_timestamp(timestamp_str)
+        # Logging diagnóstico: registrar tiempos y bandera retain para entender TTL
+        try:
+            retain_flag = bool(getattr(msg, 'retain', False))
+        except Exception:
+            retain_flag = False
+
+        now_utc = datetime.now(timezone.utc)
+        try:
+            age_minutes = (now_utc - timestamp).total_seconds() / 60.0
+        except Exception:
+            age_minutes = None
+
+        log.info(f"Mensaje {hostname}: timestamp={timestamp.isoformat()} retain={retain_flag} now={now_utc.isoformat()} age_min={age_minutes}")
         
         # Actualizar mapa
         if hostname in hosts_map:
