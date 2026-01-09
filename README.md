@@ -50,6 +50,105 @@ graph TD
     style P fill:#87CEEB
 ```
 
+## 🛡️ Cliente VPN (Actualizador de hosts)
+
+El proyecto incluye también un **Cliente VPN** que se suscribe a los topics MQTT publicados por los agentes LAN y mantiene actualizado, de forma atómica, el archivo `hosts` de Windows con las entradas `hostname -> ip`.
+
+### 🎯 Propósito
+
+Resolver la resolución de nombres en conexiones VPN donde no hay DNS interno ni propagación de broadcasts, aprovechando el broker MQTT como fuente de verdad.
+
+### Cómo funciona (diagrama)
+
+```mermaid
+graph LR
+    A[Agentes en LAN] --> B[Publican en MQTT]
+    B --> C[Broker HiveMQ]
+    C --> D[Cliente VPN se suscribe]
+    D --> E[Actualiza archivo hosts]
+    E --> F[Windows resuelve nombres]
+
+    style A fill:#90EE90
+    style C fill:#FFD700
+    style E fill:#87CEEB
+    style F fill:#98FB98
+```
+
+### Flujo resumido
+
+1. Los agentes LAN publican en `dac/pc/{hostname}` con retain=true.
+2. El broker retiene el último mensaje de cada host.
+3. El Cliente VPN recibe el snapshot y construye un mapa `hostname -> {ip,timestamp}`.
+4. El Cliente actualiza el bloque delimitado en `C:\Windows\System32\drivers\etc\hosts` de forma atómica.
+5. Las entradas inactivas se comentan en lugar de eliminarse (TTL configurable).
+
+### Configuración clave en `.env`
+
+Además de las variables del agente, el cliente utiliza:
+
+```env
+HOSTS_UPDATE_INTERVAL=30
+HOST_TTL_MINUTES=5
+```
+
+### Bloque en `hosts`
+
+El cliente mantiene un bloque delimitado que preserva el resto del archivo:
+
+```
+# --- BEGIN MQTT-HOSTS ---
+192.168.1.41    DYD01
+192.168.1.20    NAS
+# 192.168.1.50    PC-VIEJA  # Inactivo desde 2026-01-08T12:30:00+00:00
+# --- END MQTT-HOSTS ---
+```
+
+### Diagrama de estados (hosts)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Desconocido
+    Desconocido --> Activo: Mensaje recibido
+    Activo --> Activo: Mensaje actualizado menor_TTL
+    Activo --> Inactivo: Sin mensajes mayor_TTL
+    Inactivo --> Activo: Mensaje recibido
+
+    note right of Activo
+        Entrada activa en hosts
+    end note
+
+    note right of Inactivo
+        Entrada comentada en hosts
+    end note
+```
+
+> Nota: Los marcadores del bloque (`BEGIN`/`END`) y la escritura atómica evitan corrupción del `hosts`.
+
+### Ejecución (Administrador requerido)
+
+```powershell
+# Ejecutar como Administrador
+
+```
+
+### Crear tarea programada (ejemplo)
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "D:\proyectos\dac\dacdns\iniciar_cliente_vpn.bat" -WorkingDirectory "D:\proyectos\dac\dacdns"
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "ClienteVPN_Hosts" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Actualiza archivo hosts con IPs de MQTT"
+```
+
+### Troubleshooting rápido
+- Verificar ejecución como Administrador.
+- Asegurarse que `.env` tiene las mismas credenciales que el agente.
+- Comprobar que los agentes publican en `dac/pc/#`.
+- Revisar logs para errores de permisos o conexión.
+
+---
+
 ### Descripción del flujo normal:
 
 1. **Inicio**: El programa carga las variables de entorno desde `.env`
