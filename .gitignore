@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Credenciales - NUNCA subir al repositorio
+.env
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+ 
+# Build / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+.eggs/
+
+# Test / cache / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Packages and temp
+*.egg
+*.whl
+*.pid
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+.ropeproject/
+.env.local
